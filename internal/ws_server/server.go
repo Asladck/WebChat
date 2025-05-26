@@ -1,6 +1,7 @@
 package ws_server
 
 import (
+	"context"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"log"
@@ -14,6 +15,7 @@ const htmlDir = "./web/templates/html"
 
 type WSServer interface {
 	Start() error
+	Stop() error
 }
 type wsSrv struct {
 	mux       *http.ServeMux
@@ -49,6 +51,17 @@ func (ws *wsSrv) testHandler(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("Test isn`t successful")
 		return
 	}
+}
+func (ws *wsSrv) Stop() error {
+	close(ws.broadcast)
+	ws.mutex.Lock()
+	for conn := range ws.wsClients {
+		conn.Close()
+		delete(ws.wsClients, conn)
+	}
+	ws.mutex.Unlock()
+	return ws.srv.Shutdown(context.Background())
+
 }
 func (ws *wsSrv) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := ws.wsUpg.Upgrade(w, r, nil)

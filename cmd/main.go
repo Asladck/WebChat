@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/sirupsen/logrus"
+	"time"
 	ws "websckt/internal/ws_server"
 )
 
@@ -15,4 +16,6 @@ func main() {
 	if err := wsSrv.Start(); err != nil {
 		logrus.Fatalf("Error with ws server: %v", err)
 	}
+	time.Sleep(5 * time.Second)
+	logrus.Error(wsSrv.Stop())
 }
