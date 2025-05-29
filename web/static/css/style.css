@@ -1,0 +1,27 @@
+#chat {
+    height: 400px;
+    overflow-y: scroll;
+    border: 1px solid #ccc;
+    padding: 10px;
+    background-color: #f8f9fa;
+    margin-bottom: 10px;
+}
+
+.message {
+    margin-bottom: 10px;
+    border-radius: 5px;
+    padding: 8px;
+}
+
+.address {
+    font-weight: bold;
+}
+
+.time {
+    font-size: 0.8em;
+    color: #666;
+}
+
+.text {
+    margin-top: 5px;
+}
