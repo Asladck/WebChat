@@ -1,27 +1,89 @@
-#chat {
-    height: 400px;
-    overflow-y: scroll;
-    border: 1px solid #ccc;
-    padding: 10px;
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f8f9fa;
-    margin-bottom: 10px;
+    margin: 0;
+    padding: 2rem;
+}
+
+#chat {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    padding: 1rem;
+    background-color: white;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
 }
 
 .message {
-    margin-bottom: 10px;
-    border-radius: 5px;
-    padding: 8px;
+    margin-bottom: 0.75rem;
+    max-width: 70%;
+    word-wrap: break-word;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: background-color 0.3s ease;
+}
+
+.message.bg-primary {
+    margin-left: auto;
+    text-align: right;
+}
+
+.message.bg-light {
+    margin-right: auto;
+    text-align: left;
 }
 
 .address {
-    font-weight: bold;
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
 }
 
 .time {
-    font-size: 0.8em;
-    color: #666;
+    font-size: 0.75rem;
+    color: #adb5bd;
+    margin-bottom: 0.25rem;
 }
 
 .text {
-    margin-top: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+#messageInput {
+    width: calc(100% - 100px);
+    display: inline-block;
+}
+
+#sendButton {
+    width: 90px;
+    margin-left: 10px;
+}
+.register-container {
+    max-width: 400px;
+    margin: 3rem auto;
+    padding: 2rem;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+#registerForm input {
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#message {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+#message.success {
+    color: green;
 }

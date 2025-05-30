@@ -24,9 +24,13 @@ type wsSrv struct {
 	wsUpg     *websocket.Upgrader
 	wsClients map[*websocket.Conn]struct{}
 	mutex     *sync.RWMutex
-	broadcast chan *models.WsMessage
+	broadcast chan *BroadcastPayload
 	server    *http.Server
 	engine    *gin.Engine
+}
+type BroadcastPayload struct {
+	Msg    *models.WsMessage
+	Sender *websocket.Conn
 }
 
 func NewWsServer(addr string) WSServer {
@@ -39,9 +43,12 @@ func NewWsServer(addr string) WSServer {
 		wsUpg:     &websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 		wsClients: make(map[*websocket.Conn]struct{}),
 		mutex:     &sync.RWMutex{},
-		broadcast: make(chan *models.WsMessage),
+		broadcast: make(chan *BroadcastPayload),
 	}
-
+	r.LoadHTMLFiles("./web/templates/index.html", "./web/templates/register.html")
+	r.GET("/register", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "register.html", nil)
+	})
 	r.GET("/ws", ws.wsHandler)
 	r.GET("/api/test", ws.testHandler)
 
@@ -49,7 +56,6 @@ func NewWsServer(addr string) WSServer {
 	r.Static("/static", "./web/static")
 
 	// 3. HTML шаблоны
-	r.LoadHTMLFiles("./web/templates/index.html")
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", nil)
 	})
@@ -133,18 +139,21 @@ func (ws *wsSrv) readFromClient(conn *websocket.Conn) {
 			msg.IPAddress = host
 		}
 		msg.Time = time.Now().Format("15:04")
-		ws.broadcast <- &msg
+		ws.broadcast <- &BroadcastPayload{
+			Msg:    &msg,
+			Sender: conn,
+		}
 	}
 }
 
 func (ws *wsSrv) writeToClientsBroadcast() {
-	for msg := range ws.broadcast {
+	for payload := range ws.broadcast {
 		ws.mutex.RLock()
 		for client := range ws.wsClients {
-			if msg.IsMyMessage && client.RemoteAddr().String() == msg.IPAddress {
+			if client == payload.Sender {
 				continue
 			}
-			if err := client.WriteJSON(msg); err != nil {
+			if err := client.WriteJSON(payload.Msg); err != nil {
 				logrus.Errorf("WebSocket write error: %v", err)
 			}
 		}

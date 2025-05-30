@@ -6,7 +6,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-const users = "user_table"
+const users = "users"
 
 type Config struct {
 	Host     string
