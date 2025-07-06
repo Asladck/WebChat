@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
 	"websckt/models"
 )
 
@@ -26,7 +27,11 @@ func (r *AuthPostgres) CreateUser(user models.User) (string, error) {
 func (r *AuthPostgres) GetUser(username, password, email string) (models.User, error) {
 	var user models.User
 	fmt.Println(username, " ", password, " ", email)
-	query := fmt.Sprintf("SELECT id FROM %s WHERE username=$1 AND password_hash=$2 AND email=$3", users)
-	err := r.db.Get(&user, query, username, password, email)
+	query := fmt.Sprintf("SELECT id FROM %s WHERE username=$1 AND password_hash=$2", users)
+	err := r.db.Get(&user, query, username, password)
+	if err != nil {
+		logrus.Printf("user: %s Username or Password is incorrect", username)
+		return user, err
+	}
 	return user, err
 }

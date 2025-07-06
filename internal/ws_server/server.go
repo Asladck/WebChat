@@ -1,6 +1,8 @@
 package ws_server
 
 import (
+	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -45,9 +47,15 @@ func NewWsServer(addr string) WSServer {
 		mutex:     &sync.RWMutex{},
 		broadcast: make(chan *BroadcastPayload),
 	}
-	r.LoadHTMLFiles("./web/templates/index.html", "./web/templates/register.html")
-	r.GET("/register", func(c *gin.Context) {
+	r.LoadHTMLFiles("./web/templates/index.html", "./web/templates/chat.html", "./web/templates/register.html", "./web/templates/login.html")
+	r.GET("/sign-up", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "register.html", nil)
+	})
+	r.GET("/sign-in", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "login.html", nil)
+	})
+	r.GET("/chat", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "chat.html", nil)
 	})
 	r.GET("/ws", ws.wsHandler)
 	r.GET("/api/test", ws.testHandler)
@@ -92,34 +100,77 @@ func (ws *wsSrv) testHandler(c *gin.Context) {
 }
 
 func (ws *wsSrv) wsHandler(c *gin.Context) {
-	clientIP := c.Request.Header.Get("X-Forwarded-For")
-	if clientIP == "" {
-		// Если заголовка нет, используем стандартный метод
-		clientIP = strings.Split(c.Request.RemoteAddr, ":")[0]
-	} else {
-		// X-Forwarded-For может содержать цепочку IP (первый - исходный клиент)
-		ips := strings.Split(clientIP, ",")
-		clientIP = strings.TrimSpace(ips[0])
-	}
-
-	logrus.Infof("Real client IP: %s", clientIP)
-
-	conn, err := ws.wsUpg.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		logrus.Errorf("WebSocket upgrade error: %v", err)
+	// 1. Получение и проверка JWT-токена из query
+	tokenStr := c.Query("token")
+	if tokenStr == "" {
+		logrus.Warn("WebSocket connection attempt without token")
+		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 
-	logrus.Infof("Client %s connected", conn.RemoteAddr().String())
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		// Проверка алгоритма подписи
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte("qweqroqwro123e21edwqdl@@"), nil
+	})
 
+	if err != nil || !token.Valid {
+		logrus.WithError(err).Warn("Invalid JWT token")
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Извлечение username из токена
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		logrus.Warn("Failed to parse JWT claims")
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	username, ok := claims["username"].(string)
+	if !ok || username == "" {
+		logrus.Warn("Username not found in token")
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	// 3. Получение IP-адреса клиента
+	clientIP := getClientIP(c.Request)
+	logrus.WithFields(logrus.Fields{
+		"username": username,
+		"ip":       clientIP,
+		"agent":    c.Request.UserAgent(),
+	}).Info("New WebSocket connection")
+
+	// 4. Апгрейд соединения до WebSocket
+	conn, err := ws.wsUpg.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		logrus.WithError(err).Error("WebSocket upgrade failed")
+		return
+	}
+
+	// 5. Регистрация клиента
 	ws.mutex.Lock()
 	ws.wsClients[conn] = struct{}{}
 	ws.mutex.Unlock()
 
-	go ws.readFromClient(conn)
+	// 6. Запуск обработчика входящих сообщений
+	go ws.readFromClient(conn, username)
+}
+func getClientIP(r *http.Request) string {
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		// Берём первый IP из цепочки
+		ips := strings.Split(forwarded, ",")
+		return strings.TrimSpace(ips[0])
+	}
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return ip
 }
 
-func (ws *wsSrv) readFromClient(conn *websocket.Conn) {
+func (ws *wsSrv) readFromClient(conn *websocket.Conn, username string) {
 	defer func() {
 		conn.Close()
 		ws.mutex.Lock()
@@ -134,11 +185,12 @@ func (ws *wsSrv) readFromClient(conn *websocket.Conn) {
 			break
 		}
 		msg.IsMyMessage = false
+		msg.Username = username
+		msg.Time = time.Now().Format("15:04")
 		host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 		if err == nil {
 			msg.IPAddress = host
 		}
-		msg.Time = time.Now().Format("15:04")
 		ws.broadcast <- &BroadcastPayload{
 			Msg:    &msg,
 			Sender: conn,

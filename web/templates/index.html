@@ -2,19 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket Chat</title>
+    <title>Main</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="container mt-4">
-<h2 class="text-center mb-3">WebSocket Chat</h2>
-<div id="chat"></div>
-<div class="input-group mb-3">
-    <input type="text" id="messageInput" class="form-control" placeholder="Type a message">
-    <button id="sendButton" class="btn btn-primary">Send</button>
-</div>
+<body>
+<h1>Welcome, <span id="username">Guest</span>!</h1>
+<button onclick="window.location.href='/chat'">Go to Chat</button>
 
-<script src="/static/js/chat.js"></script>
+<script>
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+        window.location.href = "/sign-in";
+    } else {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const username = payload.username;
+            if (username) {
+                document.getElementById("username").textContent = username;
+            } else {
+                throw new Error("No username in token");
+            }
+        } catch (e) {
+            console.error("Token error:", e);
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("refresh_token");
+            localStorage.removeItem("username");
+            window.location.href = "/sign-in";
+        }
+    }
+</script>
 </body>
 </html>

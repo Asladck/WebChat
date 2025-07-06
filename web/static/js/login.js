@@ -1,34 +1,33 @@
-document.getElementById("registerForm").addEventListener("submit", async (e) => {
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const name = document.getElementById("name").value.trim();
     const email = document.getElementById("email").value.trim();
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
     const messageDiv = document.getElementById("message");
 
     try {
-        const res = await fetch("/auth/sign-up", {
+        const res = await fetch("/auth/sign-in", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, username, password })
+            body: JSON.stringify({ email, username, password_hash: password })
         });
 
         const data = await res.json();
 
         if (res.ok) {
-            messageDiv.innerText = "Registration successful!";
-            messageDiv.classList.add("success");
-            messageDiv.classList.remove("failed");
-
-            setTimeout(() => window.location.href = "/auth/sign-in", 1000);
+            const tokenPayload = JSON.parse(atob(data.access_token.split('.')[1]));
+            localStorage.setItem("access_token", data.access_token);
+            localStorage.setItem("refresh_token", data.refresh_token);
+            localStorage.setItem("username", tokenPayload.username);
+            console.log(localStorage.getItem("access_token"));
+            window.location.href = "/";
         } else {
-            messageDiv.innerText = data.message || "Registration failed.";
+            messageDiv.innerText = data.message || "Login failed.";
             messageDiv.classList.remove("success");
             messageDiv.classList.add("failed");
-
         }
     } catch (err) {
-        console.error("Registration error:", err);
+        console.error("Login error:", err);
         messageDiv.innerText = "Something went wrong.";
         messageDiv.classList.remove("success");
         messageDiv.classList.add("failed");
