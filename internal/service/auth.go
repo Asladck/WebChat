@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/sirupsen/logrus"
 	"time"
 	"websckt/internal/repository"
 	"websckt/models"
@@ -20,7 +21,8 @@ const (
 
 type tokenClaims struct {
 	jwt.StandardClaims
-	UserId string `json:"id"`
+	UserId   string `json:"id"`
+	Username string `json:"username"`
 }
 type AuthService struct {
 	repo repository.Authorization
@@ -55,17 +57,21 @@ func (s *AuthService) GenerateToken(username, password, email string) (string, s
 		return "", "", err
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &tokenClaims{
-		jwt.StandardClaims{
+		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(tokenTTL).Unix(),
 			IssuedAt:  time.Now().Unix(),
 		},
-		user.Id})
+		UserId:   user.Id,
+		Username: user.Username,
+	})
 	refToken := jwt.NewWithClaims(jwt.SigningMethodHS256, &tokenClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(tokenRTTL).Unix(),
 		},
-		UserId: user.Id,
+		UserId:   user.Id,
+		Username: user.Username,
 	})
+	logrus.Println(user.Username)
 	rt, err := refToken.SignedString([]byte(signingKeyR))
 	at, err := token.SignedString([]byte(signingKeyA))
 	return at, rt, err
@@ -90,12 +96,17 @@ func (s *AuthService) ParseRefToken(tokenR string) (string, error) {
 	return claims.UserId, nil
 }
 func (s *AuthService) GenerateAccToken(userId string) (string, error) {
+	user, err := s.repo.GetUserByID(userId)
+	if err != nil {
+		return "", err
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &tokenClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(tokenTTL).Unix(),
 			IssuedAt:  time.Now().Unix(),
 		},
-		UserId: userId,
+		UserId:   user.Id,
+		Username: user.Username,
 	})
 	return token.SignedString([]byte(signingKeyA))
 }

@@ -47,7 +47,7 @@ func NewWsServer(addr string) WSServer {
 		mutex:     &sync.RWMutex{},
 		broadcast: make(chan *BroadcastPayload),
 	}
-	r.LoadHTMLFiles("./web/templates/index.html", "./web/templates/chat.html", "./web/templates/register.html", "./web/templates/login.html")
+	r.LoadHTMLFiles("./web/templates/profile.html", "./web/templates/index.html", "./web/templates/chat.html", "./web/templates/register.html", "./web/templates/login.html")
 	r.GET("/sign-up", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "register.html", nil)
 	})
@@ -56,6 +56,10 @@ func NewWsServer(addr string) WSServer {
 	})
 	r.GET("/chat", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "chat.html", nil)
+	})
+	r.GET("/profile/:username", func(c *gin.Context) {
+		username := c.Param("username")
+		c.HTML(http.StatusOK, "profile.html", gin.H{"username": username})
 	})
 	r.GET("/ws", ws.wsHandler)
 	r.GET("/api/test", ws.testHandler)
@@ -106,6 +110,8 @@ func (ws *wsSrv) wsHandler(c *gin.Context) {
 		logrus.Warn("WebSocket connection attempt without token")
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
+	} else {
+		logrus.Println("Token is : " + tokenStr)
 	}
 
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
@@ -115,7 +121,6 @@ func (ws *wsSrv) wsHandler(c *gin.Context) {
 		}
 		return []byte("qweqroqwro123e21edwqdl@@"), nil
 	})
-
 	if err != nil || !token.Valid {
 		logrus.WithError(err).Warn("Invalid JWT token")
 		c.AbortWithStatus(http.StatusUnauthorized)
@@ -136,13 +141,12 @@ func (ws *wsSrv) wsHandler(c *gin.Context) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-
+	logrus.Println("username: " + username)
 	// 3. Получение IP-адреса клиента
 	clientIP := getClientIP(c.Request)
 	logrus.WithFields(logrus.Fields{
-		"username": username,
-		"ip":       clientIP,
-		"agent":    c.Request.UserAgent(),
+		"ip":    clientIP,
+		"agent": c.Request.UserAgent(),
 	}).Info("New WebSocket connection")
 
 	// 4. Апгрейд соединения до WebSocket

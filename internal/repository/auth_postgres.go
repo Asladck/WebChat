@@ -27,11 +27,19 @@ func (r *AuthPostgres) CreateUser(user models.User) (string, error) {
 func (r *AuthPostgres) GetUser(username, password, email string) (models.User, error) {
 	var user models.User
 	fmt.Println(username, " ", password, " ", email)
-	query := fmt.Sprintf("SELECT id FROM %s WHERE username=$1 AND password_hash=$2", users)
-	err := r.db.Get(&user, query, username, password)
+	query := fmt.Sprintf("SELECT id, username, email FROM %s WHERE username=$1 AND password_hash=$2 AND email=$3", users)
+	err := r.db.Get(&user, query, username, password, email)
 	if err != nil {
 		logrus.Printf("user: %s Username or Password is incorrect", username)
 		return user, err
+
 	}
+	logrus.Println(user.Username)
+	return user, err
+}
+func (r *AuthPostgres) GetUserByID(id string) (models.User, error) {
+	var user models.User
+	query := `SELECT id, username, email FROM users WHERE id = $1`
+	err := r.db.Get(&user, query, id)
 	return user, err
 }

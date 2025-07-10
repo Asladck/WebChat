@@ -20,7 +20,7 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
             messageDiv.classList.add("success");
             messageDiv.classList.remove("failed");
 
-            setTimeout(() => window.location.href = "/auth/sign-in", 1000);
+            setTimeout(() => window.location.href = "/sign-in", 1000);
         } else {
             messageDiv.innerText = data.message || "Registration failed.";
             messageDiv.classList.remove("success");
@@ -34,3 +34,4 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
         messageDiv.classList.add("failed");
     }
 });
+penis

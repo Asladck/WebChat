@@ -9,19 +9,29 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
         const res = await fetch("/auth/sign-in", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, username, password_hash: password })
+            body: JSON.stringify({ email, username, password_hash: password }),
         });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            const tokenPayload = JSON.parse(atob(data.access_token.split('.')[1]));
+        let data;
+        try{
+            data = await res.json();
+        }catch (jsonErr){
+            throw new Error("Invalid JSON response")
+        }
+        if (res.ok && data.access_token && data.refresh_token) {
+            // Сохраняем токены
             localStorage.setItem("access_token", data.access_token);
             localStorage.setItem("refresh_token", data.refresh_token);
+
+            // Декодируем токен
+            const payloadBase64 = data.access_token.split('.')[1];
+            const tokenPayload = JSON.parse(atob(payloadBase64));
             localStorage.setItem("username", tokenPayload.username);
-            console.log(localStorage.getItem("access_token"));
+
+            console.log("Login successful:", tokenPayload);
+
+            // Переход на главную
             window.location.href = "/";
-        } else {
+        }  else {
             messageDiv.innerText = data.message || "Login failed.";
             messageDiv.classList.remove("success");
             messageDiv.classList.add("failed");
