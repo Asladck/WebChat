@@ -27,7 +27,7 @@ func main() {
 		logrus.Fatal("error initializing configs", err)
 	}
 	if err := godotenv.Load(); err != nil {
-		logrus.Fatal("error initializing configs", err)
+		logrus.Info("error initializing configs", err)
 	}
 
 	db, err := repository.NewPostgresDB(repository.Config{
