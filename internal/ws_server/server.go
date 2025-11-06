@@ -34,19 +34,13 @@ type BroadcastPayload struct {
 	Msg    *models.WsMessage
 	Sender *websocket.Conn
 }
+type tokenClaims struct {
+	jwt.StandardClaims
+	UserId   string `json:"id"`
+	Username string `json:"username"`
+}
 
-func NewWsServer(addr string) WSServer {
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
-	r.Use(gin.Recovery(), gin.Logger())
-
-	ws := &wsSrv{
-		engine:    r,
-		wsUpg:     &websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
-		wsClients: make(map[*websocket.Conn]struct{}),
-		mutex:     &sync.RWMutex{},
-		broadcast: make(chan *BroadcastPayload),
-	}
+func InitRoutes(ws *wsSrv, r *gin.Engine) *gin.Engine {
 	r.LoadHTMLFiles("./web/templates/profile.html", "./web/templates/index.html", "./web/templates/chat.html", "./web/templates/register.html", "./web/templates/login.html")
 	r.GET("/sign-up", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "register.html", nil)
@@ -63,14 +57,26 @@ func NewWsServer(addr string) WSServer {
 	})
 	r.GET("/ws", ws.wsHandler)
 	r.GET("/api/test", ws.testHandler)
-
-	// 2. Статические файлы
-	r.Static("/static", "./web/static")
-
-	// 3. HTML шаблоны
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", nil)
 	})
+	r.Static("/static", "./web/static")
+	return r
+}
+func NewWsServer(addr string) WSServer {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+	r.Use(gin.Recovery(), gin.Logger())
+
+	ws := &wsSrv{
+		engine:    r,
+		wsUpg:     &websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
+		wsClients: make(map[*websocket.Conn]struct{}),
+		mutex:     &sync.RWMutex{},
+		broadcast: make(chan *BroadcastPayload),
+	}
+
+	r = InitRoutes(ws, r)
 
 	ws.server = &http.Server{
 		Addr:    addr,
@@ -104,7 +110,6 @@ func (ws *wsSrv) testHandler(c *gin.Context) {
 }
 
 func (ws *wsSrv) wsHandler(c *gin.Context) {
-	// 1. Получение и проверка JWT-токена из query
 	tokenStr := c.Query("token")
 	if tokenStr == "" {
 		logrus.Warn("WebSocket connection attempt without token")
@@ -114,8 +119,7 @@ func (ws *wsSrv) wsHandler(c *gin.Context) {
 		logrus.Println("Token is : " + tokenStr)
 	}
 
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		// Проверка алгоритма подписи
+	token, err := jwt.ParseWithClaims(tokenStr, &tokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -127,46 +131,61 @@ func (ws *wsSrv) wsHandler(c *gin.Context) {
 		return
 	}
 
-	// 2. Извлечение username из токена
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		logrus.Warn("Failed to parse JWT claims")
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-
-	username, ok := claims["username"].(string)
-	if !ok || username == "" {
+	claims, ok := token.Claims.(*tokenClaims)
+	if !ok || claims.Username == "" {
 		logrus.Warn("Username not found in token")
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
+	username := claims.Username
+
 	logrus.Println("username: " + username)
-	// 3. Получение IP-адреса клиента
 	clientIP := getClientIP(c.Request)
 	logrus.WithFields(logrus.Fields{
 		"ip":    clientIP,
 		"agent": c.Request.UserAgent(),
 	}).Info("New WebSocket connection")
 
-	// 4. Апгрейд соединения до WebSocket
 	conn, err := ws.wsUpg.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		logrus.WithError(err).Error("WebSocket upgrade failed")
 		return
 	}
 
-	// 5. Регистрация клиента
 	ws.mutex.Lock()
 	ws.wsClients[conn] = struct{}{}
 	ws.mutex.Unlock()
 
-	// 6. Запуск обработчика входящих сообщений
+	conn.SetReadLimit(512)
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(appData string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	go func(cConn *websocket.Conn) {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := cConn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					logrus.WithError(err).Info("Ping failed, closing connection")
+					cConn.Close()
+					ws.mutex.Lock()
+					delete(ws.wsClients, cConn)
+					ws.mutex.Unlock()
+					return
+				}
+			}
+		}
+	}(conn)
+
 	go ws.readFromClient(conn, username)
 }
 func getClientIP(r *http.Request) string {
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		// Берём первый IP из цепочки
 		ips := strings.Split(forwarded, ",")
 		return strings.TrimSpace(ips[0])
 	}
@@ -211,6 +230,12 @@ func (ws *wsSrv) writeToClientsBroadcast() {
 			}
 			if err := client.WriteJSON(payload.Msg); err != nil {
 				logrus.Errorf("WebSocket write error: %v", err)
+				ws.mutex.RUnlock()
+				ws.mutex.Lock()
+				client.Close()
+				delete(ws.wsClients, client)
+				ws.mutex.Unlock()
+				ws.mutex.RLock()
 			}
 		}
 		ws.mutex.RUnlock()

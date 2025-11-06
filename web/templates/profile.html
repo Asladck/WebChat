@@ -1,71 +1,140 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Profile</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Profile — ChatApp</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-
-<!-- Navbar -->
-<header>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
-    <a class="navbar-brand" href="/">ChatApp</a>
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-        <li class="nav-item"><a class="nav-link" href="/chat">Chat</a></li>
-        <li class="nav-item"><a class="nav-link active" href="/profile">Profile</a></li>
-      </ul>
-      <span class="navbar-text text-white me-3" id="navbarUsername">Loading...</span>
-      <button class="btn btn-outline-light btn-sm" onclick="logout()">Logout</button>
+  <nav class="navbar navbar-expand-lg">
+    <div class="container-main d-flex justify-content-between align-items-center">
+      <a class="navbar-brand" href="/">ChatApp</a>
+      <div class="d-flex align-items-center gap-2">
+        <span id="navbarUsername" class="me-1 text-white small">—</span>
+        <button class="btn btn-outline-light btn-sm" onclick="logout()">Sign out</button>
+      </div>
     </div>
   </nav>
-</header>
 
-<!-- Profile Container -->
-<div class="container mt-5">
-  <h2 class="mb-4">Your Profile</h2>
-  <div class="card p-4">
-    <p><strong>Username:</strong> <span id="username">Loading...</span></p>
-    <p><strong>Email:</strong> <span id="email">Loading...</span></p>
-    <p><strong>Name:</strong> <span id="name">Loading...</span></p>
+  <main class="container-main">
+    <div class="card-modern mx-auto" style="max-width:720px;">
+      <h4 class="mb-3">Profile</h4>
+      <p class="text-muted small">Manage your public information.</p>
 
-    <!-- Future: Add Edit Profile Button -->
-    <!-- <button class="btn btn-warning mt-3">Edit Profile</button> -->
-  </div>
-</div>
+      <div id="message" role="status" aria-live="polite"></div>
 
-<!-- JS to Extract Token Info -->
+      <form id="profileForm" class="row g-3" novalidate>
+        <div class="col-md-6 form-floating">
+          <input id="username" class="form-control" type="text" placeholder="username" required minlength="3">
+          <label for="username">Username</label>
+        </div>
+        <div class="col-md-6 form-floating">
+          <input id="email" class="form-control" type="email" placeholder="you@example.com" required>
+          <label for="email">Email</label>
+        </div>
+        <div class="col-12 form-floating">
+          <input id="name" class="form-control" type="text" placeholder="Full name">
+          <label for="name">Name</label>
+        </div>
+
+        <div class="col-12 d-flex gap-2">
+          <button id="saveBtn" type="button" class="btn btn-primary" disabled>Save</button>
+          <button type="button" class="btn btn-outline-light" onclick="logout()">Sign out</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
 <script>
-
-  document.addEventListener("DOMContentLoaded", function () {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      window.location.href = "/sign-in";
-      return;
-    }
-
+  function parseJwt(token) {
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      document.getElementById("profileLink").href = `/profile/${payload.username}`;
-
-      document.getElementById("navbarUsername").textContent = payload.username || "User";
-      document.getElementById("username").textContent = payload.username || "Not set";
-      document.getElementById("email").textContent = payload.email || "Not set";
-      document.getElementById("name").textContent = payload.name || "Not set";
+      const parts = token.split('.');
+      if (parts.length !== 3) throw new Error('Invalid token');
+      let payload = parts[1];
+      payload = payload.replace(/-/g, '+').replace(/_/g, '/');
+      while (payload.length % 4) payload += '=';
+      return JSON.parse(atob(payload));
     } catch (e) {
-      localStorage.clear();
-      window.location.href = "/sign-in";
+      console.error("parseJwt error:", e);
+      return null;
     }
+  }
+
+  async function saveProfile(data){
+    const token = localStorage.getItem("access_token");
+    if (!token) { window.location.href = "/sign-in"; return; }
+    try{
+      const res = await fetch('/user/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type':'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify(data)
+      });
+      const r = await res.json().catch(()=>null);
+      const msg = document.getElementById('message');
+      if (res.ok) {
+        msg.innerHTML = '<div class="alert alert-success">Profile saved</div>';
+        document.getElementById('saveBtn').disabled = true;
+      } else {
+        msg.innerHTML = `<div class="alert alert-danger">Save failed: ${r && r.message ? r.message : res.statusText}</div>`;
+      }
+    }catch(e){
+      document.getElementById('message').innerHTML = '<div class="alert alert-danger">Network error</div>';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) { window.location.href = '/sign-in'; return; }
+    const payload = parseJwt(token);
+    if (!payload) { localStorage.clear(); window.location.href = '/sign-in'; return; }
+
+    const username = payload.username || '';
+    const email = payload.email || '';
+    document.getElementById('username').value = username;
+    document.getElementById('email').value = email;
+    document.getElementById('name').value = payload.name || '';
+    document.getElementById('navbarUsername').textContent = username || 'User';
+
+    const saveBtn = document.getElementById('saveBtn');
+    const formEls = ['username','email','name'].map(id => document.getElementById(id));
+
+    function checkModified(){
+      const modified = formEls.some(el => el.value.trim() !== (payload[el.id] || ''));
+      saveBtn.disabled = !modified;
+    }
+
+    formEls.forEach(el => {
+      el.addEventListener('input', () => {
+        if (!el.checkValidity()) el.classList.add('is-invalid'); else el.classList.remove('is-invalid');
+        checkModified();
+      });
+    });
+
+    saveBtn.addEventListener('click', () => {
+      if (!document.getElementById('username').checkValidity() || !document.getElementById('email').checkValidity()) {
+        document.getElementById('message').innerHTML = '<div class="alert alert-danger">Please fix form errors.</div>';
+        return;
+      }
+      const data = {
+        username: document.getElementById('username').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        name: document.getElementById('name').value.trim()
+      };
+      saveProfile(data);
+    });
   });
 
-  function logout() {
+  function logout(){
     localStorage.clear();
-    window.location.href = "/sign-in";
+    window.location.href = '/sign-in';
   }
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

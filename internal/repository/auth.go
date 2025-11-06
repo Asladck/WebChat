@@ -7,14 +7,14 @@ import (
 	"websckt/models"
 )
 
-type AuthPostgres struct {
+type AuthRepository struct {
 	db *sqlx.DB
 }
 
-func NewAuthPostgres(db *sqlx.DB) *AuthPostgres {
-	return &AuthPostgres{db: db}
+func NewAuthRepository(db *sqlx.DB) *AuthRepository {
+	return &AuthRepository{db: db}
 }
-func (r *AuthPostgres) CreateUser(user models.User) (string, error) {
+func (r *AuthRepository) CreateUser(user models.User) (string, error) {
 	var id string
 
 	query := fmt.Sprintf("INSERT INTO %s (name,username,email,password_hash) values ($1,$2,$3,$4) RETURNING id", users)
@@ -24,7 +24,7 @@ func (r *AuthPostgres) CreateUser(user models.User) (string, error) {
 	}
 	return id, nil
 }
-func (r *AuthPostgres) GetUser(username, password, email string) (models.User, error) {
+func (r *AuthRepository) GetUser(username, password, email string) (models.User, error) {
 	var user models.User
 	fmt.Println(username, " ", password, " ", email)
 	query := fmt.Sprintf("SELECT id, username, email FROM %s WHERE username=$1 AND password_hash=$2 AND email=$3", users)
@@ -37,7 +37,7 @@ func (r *AuthPostgres) GetUser(username, password, email string) (models.User, e
 	logrus.Println(user.Username)
 	return user, err
 }
-func (r *AuthPostgres) GetUserByID(id string) (models.User, error) {
+func (r *AuthRepository) GetUserByID(id string) (models.User, error) {
 	var user models.User
 	query := `SELECT id, username, email FROM users WHERE id = $1`
 	err := r.db.Get(&user, query, id)

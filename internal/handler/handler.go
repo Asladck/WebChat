@@ -19,4 +19,9 @@ func (h *Handler) InitRouter(r *gin.Engine) {
 		auth.POST("/refresh", h.refreshHandler)
 		auth.POST("/sign-in", h.signIn)
 	}
+	api := r.Group("/api", h.userIdentity)
+	user := api.Group("/user/:id")
+	{
+		user.GET("/", h.getProfile)
+	}
 }

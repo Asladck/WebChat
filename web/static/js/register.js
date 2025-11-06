@@ -1,37 +1,55 @@
-document.getElementById("registerForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = document.getElementById("name").value.trim();
-    const email = document.getElementById("email").value.trim();
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById("registerForm");
     const messageDiv = document.getElementById("message");
+    const submitBtn = document.getElementById("registerSubmit");
 
-    try {
-        const res = await fetch("/auth/sign-up", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, username, password })
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        messageDiv.innerHTML = '';
+
+        const nameEl = document.getElementById("name");
+        const emailEl = document.getElementById("email");
+        const usernameEl = document.getElementById("username");
+        const passwordEl = document.getElementById("password");
+
+        let valid = true;
+        [nameEl, emailEl, usernameEl, passwordEl].forEach(el=>{
+            if (!el.checkValidity()) { el.classList.add('is-invalid'); valid = false; } else el.classList.remove('is-invalid');
         });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            messageDiv.innerText = "Registration successful!";
-            messageDiv.classList.add("success");
-            messageDiv.classList.remove("failed");
-
-            setTimeout(() => window.location.href = "/sign-in", 1000);
-        } else {
-            messageDiv.innerText = data.message || "Registration failed.";
-            messageDiv.classList.remove("success");
-            messageDiv.classList.add("failed");
-
+        if (!valid) {
+            messageDiv.innerHTML = '<div class="alert alert-danger">Please fix form errors.</div>';
+            return;
         }
-    } catch (err) {
-        console.error("Registration error:", err);
-        messageDiv.innerText = "Something went wrong.";
-        messageDiv.classList.remove("success");
-        messageDiv.classList.add("failed");
-    }
+
+        const name = nameEl.value.trim();
+        const email = emailEl.value.trim();
+        const username = usernameEl.value.trim();
+        const password = passwordEl.value.trim();
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+
+        try {
+            const res = await fetch("/auth/sign-up", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, email, username, password })
+            });
+
+            const data = await res.json().catch(()=>null);
+
+            if (res.ok) {
+                messageDiv.innerHTML = '<div class="alert alert-success">Registration successful! Redirecting to sign in…</div>';
+                setTimeout(() => window.location.href = "/sign-in", 900);
+            } else {
+                messageDiv.innerHTML = `<div class="alert alert-danger">${data && data.message ? data.message : 'Registration failed.'}</div>`;
+            }
+        } catch (err) {
+            console.error("Registration error:", err);
+            messageDiv.innerHTML = '<div class="alert alert-danger">Something went wrong.</div>';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create account';
+        }
+    });
 });
-penis
