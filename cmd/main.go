@@ -4,7 +4,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"os"
 	"time"
 	handler "websckt/internal/handler"
 	"websckt/internal/repository"
@@ -34,7 +33,7 @@ func main() {
 		Host:     viper.GetString("db.host"),
 		Port:     viper.GetString("db.port"),
 		Username: viper.GetString("db.username"),
-		Password: os.Getenv("DB_PASSWORD"),
+		Password: viper.GetString("db.password"),
 		DBName:   viper.GetString("db.dbname"),
 		SSLMode:  viper.GetString("db.sslmode"),
 	})

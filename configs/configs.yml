@@ -3,6 +3,7 @@ server:
 db:
   username: "postgres"
   host: "postgres"
+  password: "postgres"
   port: "5432"
   dbname: "ws"
   sslmode: "disable"
