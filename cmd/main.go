@@ -24,7 +24,7 @@ func initConfig() error {
 func main() {
 	logrus.SetFormatter(new(logrus.JSONFormatter))
 	if err := initConfig(); err != nil {
-		logrus.Fatal("error initializing configs", err)
+		logrus.Info("error initializing configs", err)
 	}
 	if err := godotenv.Load(); err != nil {
 		logrus.Info("error initializing configs", err)
